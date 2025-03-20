@@ -218,7 +218,7 @@ class FashionClassifier(ABC):
 
         return predictions
 
-    def evaluate(self, X_test, y_test):
+    def evaluate(self, X_test, y_test, verbose=False):
         """Evaluate model on test data."""
         X_test = X_test.numpy() if isinstance(X_test, torch.Tensor) else X_test
         y_test = y_test.numpy() if isinstance(y_test, torch.Tensor) else y_test
@@ -229,9 +229,14 @@ class FashionClassifier(ABC):
         print(f"Starting evaluation on {n_samples} samples...")
         start_time = time.time()
 
-        # Track per-class accuracy
-        class_correct = np.zeros(self.n_classes)
-        class_total = np.zeros(self.n_classes)
+        # Find the actual number of classes in the test data
+        unique_labels = np.unique(y_test)
+        max_label = int(max(unique_labels))
+        actual_n_classes = max(self.n_classes, max_label + 1)
+
+        # Track per-class accuracy with arrays large enough for all classes
+        class_correct = np.zeros(actual_n_classes)
+        class_total = np.zeros(actual_n_classes)
 
         # Process batches for faster evaluation
         batch_size = 100
@@ -247,6 +252,12 @@ class FashionClassifier(ABC):
             for idx in range(start_idx, end_idx):
                 x = X_test[idx]
                 true_label = int(y_test[idx])
+
+                # Skip invalid labels
+                if true_label >= actual_n_classes:
+                    print(
+                        f"Warning: Found label {true_label} which is outside the expected range. Skipping.")
+                    continue
 
                 outputs = self.forward(x)
 
@@ -276,13 +287,13 @@ class FashionClassifier(ABC):
         except:
             pass
 
-        # Print per-class accuracy for first 10 classes
-        print("\nPer-class accuracy (first 10 classes):")
-        for i in range(min(10, self.n_classes)):
-            if class_total[i] > 0:
-                class_acc = class_correct[i] / class_total[i]
-                print(
-                    f"  Class {i}: {class_acc:.4f} ({int(class_correct[i])}/{int(class_total[i])})")
+        if verbose:
+            print("\nPer-class accuracy (for classes with samples):")
+            for i in range(actual_n_classes):
+                if class_total[i] > 0:
+                    class_acc = class_correct[i] / class_total[i]
+                    print(
+                        f"  Class {i}: {class_acc:.4f} ({int(class_correct[i])}/{int(class_total[i])})")
 
         return accuracy
 

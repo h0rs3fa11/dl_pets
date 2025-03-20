@@ -21,6 +21,17 @@ def load_data():
   return X_train, y_train, X_val, y_val
 
 
+def load_test_data():
+  print("Loading test data...")
+  test_data = np.load(os.path.join(data_dir, 'test_features.npz'))
+  X_test, y_test = test_data['X'], test_data['y']
+
+  unique_labels = np.unique(y_test)
+  n_classes = len(unique_labels)
+  n_features = X_test.shape[1]
+
+  return X_test, y_test, n_features, n_classes
+
 def prepare_data():
   X_train, y_train, X_val, y_val = load_data()
   min_label = np.min(y_train)

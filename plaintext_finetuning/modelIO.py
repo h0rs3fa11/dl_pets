@@ -30,12 +30,12 @@ class ModelIO:
         model.weights = weights
         model.bias = bias
         if model.n_features != n_features or model.n_classes != n_classes:
-          print(
+            print(
               f"Warning: Model dimensions mismatch. Saved: {n_features}x{n_classes}, Current: {model.n_features}x{model.n_classes}")
 
-          # Keep existing context
-          print(f"Updated existing model with weights from {filepath}")
-          return model
+        # Keep existing context
+        print(f"Updated existing model with weights from {filepath}")
+        return model
 
     @staticmethod
     def save_training_history(history, filepath):
