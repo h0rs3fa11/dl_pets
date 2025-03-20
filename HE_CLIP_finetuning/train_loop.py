@@ -4,7 +4,7 @@ from he_fashion_classifier import HEFashionClassifier
 from he_model_IO import HEModelIO
 from helper import preprocess_labels
 
-data_dir = "extracted_features"
+data_dir = "../data/extracted_features"
 
 # Load the extracted features
 print("Loading training data...")

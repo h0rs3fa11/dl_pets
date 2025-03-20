@@ -128,58 +128,64 @@ class HEFashionClassifier:
 
         return outputs
 
-    def approximate_cross_entropy(self, encrypted_outputs, plaintext_label):
-        """
-        Approximate cross-entropy loss in the encrypted domain.
+    # Approximation functions
+    def approximate_exp(self, encrypted_x, degree=3):
+        """Polynomial approximation of exp(x) using Taylor series"""
+        # Create a constant vector of 1s
+        result = ts.ckks_vector(self.context, [1.0])
 
-        For simplicity, we use a modified squared error that behaves similarly
-        to cross-entropy for classification problems.
+        # Start with x as the first term
+        term = encrypted_x.copy()
+        result = result + term
 
-        Args:
-            encrypted_outputs: List of encrypted logits for each class
-            encrypted_label: Encrypted one-hot encoded true label
+        # Compute higher-order terms
+        x_power = encrypted_x.copy()
+        factorial = 1.0
 
-        Returns:
-            Encrypted loss value
-        """
-        # For simplicity, we'll use a weighted squared error
-        # More sophisticated approximations are possible but complex
+        for i in range(2, degree + 1):
+            factorial *= i
+            x_power = x_power * encrypted_x  # Compute x^i
+            term = x_power * (1.0 / factorial)  # Scale by 1/i!
+            result = result + term
 
-        total_loss = None
+    def approximate_softmax(self, encrypted_logits, degree=3):
+        # Apply exp approximation to each logit
+        exp_approx = [self.approximate_exp(self.context, logit, degree)
+                      for logit in encrypted_logits]
 
-        # First decrypt the label to get the one-hot vector
-        # In a real privacy-preserving system, this would not be done
-        # Instead, the label would remain encrypted and we would use more complex HE operations
-        # decrypted_label = encrypted_label.decrypt()
-        one_hot = np.zeros(self.n_classes)
-        one_hot[plaintext_label] = 1.0
+        # Compute sum (we need to add all vectors)
+        exp_sum = exp_approx[0].copy()
+        for i in range(1, len(exp_approx)):
+            exp_sum = exp_sum + exp_approx[i]
 
-        # Compute loss components class by class
-        for class_idx in range(self.n_classes):
-            # Get the true label value for this class
-            true_label_val = one_hot[class_idx]
+        sum_val = exp_sum.decrypt()[0]
+        recip = 1.0 / sum_val
 
-            # Get the prediction for this class
-            # pred = encrypted_outputs[class_idx]
+        # Scale each exp_approx by the reciprocal
+        softmax_result = [exp_val * recip for exp_val in exp_approx]
 
-            # Let the labels be plaintext
-            decrypted_pred = encrypted_outputs[class_idx].decrypt()[0]
+        return softmax_result
 
-            # Create an encrypted version of the label component
-            # true_label = ts.ckks_vector(self.context, [true_label_val])
+    def approximate_cross_entropy(self, encrypted_logits, labels, exp_degree=3):
+        """Approximate cross-entropy using only additions and multiplications"""
+        # Get softmax approximation
+        softmax_probs = self.approximate_softmax(
+            self.context, encrypted_logits, exp_degree)
 
-            # Compute squared difference
-            # diff = pred - true_label
-            diff = decrypted_pred - true_label_val
-            squared_diff = diff * diff  # Encrypted -> plaintext multiplication
+        # Extract probability for the true class
+        # In a real HE setting, you would use encrypted operations here
+        true_probs = []
+        for i, label in enumerate(labels):
+            if label == 1:
+                true_probs.append(softmax_probs[i])
 
-            # Add to total loss
-            if total_loss is None:
-                total_loss = squared_diff
-            else:
-                total_loss += squared_diff
+        # Compute negative log approximation
+        # Simplified: decrypt, compute log, re-encrypt
+        # In a real setting, you would use polynomial approximation
+        true_prob_val = true_probs[0].decrypt()[0]
+        neg_log_val = -np.log(true_prob_val)
 
-        return total_loss
+        return neg_log_val
 
     def compute_encrypted_gradients(self, encrypted_x, encrypted_outputs, plaintext_lable):
         """
