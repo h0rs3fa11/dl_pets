@@ -26,7 +26,7 @@ while (epochs <= epoches):
   history = model.train(
       X_train, y_train_mapped, 1, learning_rate=learning_rate, batch_size=batch_size, verbose=True)
 
-  val_loss, val_accuracy = model.validate(X_val, y_val)
+  val_loss, val_accuracy = model.validate(X_val, y_val_mapped)
   val_per_epoch["val_loss"].append(val_loss)
   val_per_epoch["val_accuracy"].append(val_accuracy)
   print(
