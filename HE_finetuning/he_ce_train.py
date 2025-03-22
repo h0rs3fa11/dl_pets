@@ -21,7 +21,7 @@ while (epochs <= epoches):
         model_save_path, f'he_fashion_model_{epochs-1}.json'), model)
 
   history = model.train(
-      X_train, y_train_mapped, X_val, y_val_mapped, 1, learning_rate=learning_rate, batch_size=batch_size, verbose=True, validation=True)
+      X_train, y_train_mapped, 1, learning_rate=learning_rate, batch_size=batch_size, verbose=True, validation=True)
 
   HEModelIO.save_model(model, os.path.join(
       model_save_path, f'he_fashion_model_{epochs}.json'))

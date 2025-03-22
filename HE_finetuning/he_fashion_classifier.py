@@ -36,8 +36,8 @@ class HEFashionClassifier(ABC):
         poly_mod_degree = 8192
         # poly_mod_degree = 4096
         # More levels for deeper computation
-        # coeff_mod_bit_sizes = [60, 40, 40, 60]
-        coeff_mod_bit_sizes = [60, 40, 40, 60]
+        coeff_mod_bit_sizes = [50, 40, 40, 50]
+        # coeff_mod_bit_sizes = [40, 30, 30, 40]
 
         context = ts.context(
             ts.SCHEME_TYPE.CKKS,
@@ -46,7 +46,7 @@ class HEFashionClassifier(ABC):
         )
 
         # higher gives more precision
-        context.global_scale = 2**30
+        context.global_scale = 2**40
         context.generate_galois_keys()
 
         return context
@@ -72,7 +72,7 @@ class HEFashionClassifier(ABC):
             result = encrypted_x.dot(class_weights)
             result = result + self.bias[class_idx]
 
-            outputs.append(result.decrypt())
+            outputs.extend(result.decrypt())
 
         return np.array(outputs)
 
@@ -109,12 +109,9 @@ class HEFashionClassifier(ABC):
     def compute_gradients(self, encrypted_x, outputs, lable):
         pass
 
-    def train(self, X_train, y_train, X_val, y_val, epochs=epoches, learning_rate=learning_rate, batch_size=batch_size, verbose=False, validation=False):
+    def train(self, X_train, y_train, epochs=epoches, learning_rate=learning_rate, batch_size=batch_size, verbose=False):
         X_train = X_train.numpy() if isinstance(X_train, torch.Tensor) else X_train
         y_train = y_train.numpy() if isinstance(y_train, torch.Tensor) else y_train
-
-        X_val = X_val.numpy() if isinstance(X_val, torch.Tensor) else X_val
-        y_val = y_val.numpy() if isinstance(y_val, torch.Tensor) else y_val
 
         n_samples = len(X_train)
         history = {'train_loss': [], 'val_loss': [],
@@ -122,7 +119,6 @@ class HEFashionClassifier(ABC):
 
         print(
             f"Training set size: {n_samples} samples with {X_train.shape[1]} features")
-        print(f"Validation set size: {len(X_val)} samples")
         print(f"Batch size: {batch_size}")
         total_start_time = time.time()
 
@@ -201,50 +197,16 @@ class HEFashionClassifier(ABC):
                 # Print batch summary
                 if verbose and batch_idx % 5 == 0:
                     print(
-                        f"  Batch {batch_idx+1}/{n_batches} completed in {batch_time:.2f}s, loss: {avg_batch_loss[0]:.6f}")
+                        f"  Batch {batch_idx+1}/{n_batches} completed in {batch_time:.2f}s, loss: {avg_batch_loss:.6f}")
 
             # Epoch summary
             avg_epoch_loss = epoch_loss / n_samples
             history['train_loss'].append(avg_epoch_loss)
             epoch_time = time.time() - epoch_start
 
-            # Validation phase will spend extra time, and it won't effect the weights and bias during the training stage, so skip it to save time
-            if validation:
-                val_loss = 0.0
-                val_correct = 0
-                val_total = 0
-
-                for i in range(len(X_val)):
-                    x = X_val[i]
-                    encrypted_x = self.encrypt_data(x)
-                    y = y_val[i]
-
-                    # Forward pass
-                    outputs = self.forward(encrypted_x)
-
-                    # Compute validation loss
-                    loss_value = self.compute_loss(outputs, y)
-                    val_loss += loss_value
-
-                    # Compute accuracy
-                    predicted = np.argmax(outputs)
-                    val_total += 1
-                    if predicted == y:
-                        val_correct += 1
-
-                # Calculate validation metrics
-                avg_val_loss = val_loss / len(X_val)
-                val_accuracy = val_correct / val_total
-
-                # Store validation metrics
-                history['val_loss'].append(avg_val_loss)
-                history['val_accuracy'].append(val_accuracy)
-
             print(f"\nEpoch {epoch+1}/{epochs} Summary:")
-            print(f"  Loss: {avg_epoch_loss[0]:.6f}")
-            if validation:
-                print(
-                    f"  Val Loss: {avg_val_loss}, Val accuracy: {val_accuracy}")
+            print(f"  Loss: {avg_epoch_loss:.6f}")
+
             print(
                 f"  Time: {epoch_time:.2f}s ({n_samples/epoch_time:.2f} samples/sec)")
 
@@ -253,6 +215,41 @@ class HEFashionClassifier(ABC):
             f"\nTraining completed in {total_time:.2f}s ({total_time/60:.2f} minutes)")
 
         return history
+
+    def validate(self, X_val, y_val):
+        # Validation phase will spend extra time, and it won't effect the weights and bias during the training stage, so skip it to save time
+        X_val = X_val.numpy() if isinstance(X_val, torch.Tensor) else X_val
+        y_val = y_val.numpy() if isinstance(y_val, torch.Tensor) else y_val
+
+        val_loss = 0.0
+        val_correct = 0
+        val_total = 0
+
+        for i in range(len(X_val)):
+            x = X_val[i]
+            encrypted_x = self.encrypt_data(x)
+            y = y_val[i]
+
+            # Forward pass
+            outputs = self.forward(encrypted_x)
+
+            # Compute validation loss
+            loss_value = self.compute_loss(outputs, y)
+            val_loss += loss_value
+
+            # Compute accuracy
+            predicted = np.argmax(outputs)
+            val_total += 1
+            if predicted == y:
+                val_correct += 1
+
+        # Calculate validation metrics
+        avg_val_loss = val_loss / len(X_val)
+        val_accuracy = val_correct / val_total
+
+        print(
+            f"  Val Loss: {avg_val_loss}, Val accuracy: {val_accuracy}")
+        return avg_val_loss, val_accuracy
 
     def evaluate(self, X_test, y_test, verbose=False):
         """Evaluate model on test data(plaintext)"""
@@ -359,7 +356,7 @@ class MSE_HEFashionClassifier(HEFashionClassifier):
             bias_gradients[class_idx] = output_grad
 
             # For weight gradients: multiply each encrypted feature by the output gradient (scalar)
-            encrypted_grad_vector = encrypted_x * output_grad[0]
+            encrypted_grad_vector = encrypted_x * output_grad
 
             decrypted_grad_vector = encrypted_grad_vector.decrypt()
 
