@@ -15,10 +15,9 @@ y_train_mapped, y_val_mapped, n_classes, label_map = preprocess_labels(
 model = MSEFashionClassifier(n_features, n_classes)
 
 history = model.train(X_train, y_train_mapped, X_val, y_val_mapped,
-                      epoches, learning_rate=learning_rate, batch_size=batch_size)
+                      epoches, learning_rate=learning_rate, batch_size=batch_size, verbose=True)
 
 # ModelIO.save_model(model, os.path.join(
-#     model_save_path, f'fashion_model_{epoch}.json'))
+#     model_save_path, f'fashion_model.json'))
 # ModelIO.save_training_history(history, os.path.join(
-#     model_save_path, f'training_history_{epoch}.json'))
-# epoch += 1
+#     model_save_path, f'training_history.json'))

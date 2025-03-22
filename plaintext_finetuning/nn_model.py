@@ -31,12 +31,6 @@ class FashionClassifier(ABC):
         self.epsilon = 1e-8
         self.t = 0
 
-    def encrypt_one_hot(self, label):
-        one_hot = np.zeros(self.n_classes)
-        one_hot[label] = 1.0
-
-        return self.encrypt_data(one_hot)
-
     def forward(self, x):
         return np.dot(x, self.weights) + self.bias
 
@@ -94,7 +88,7 @@ class FashionClassifier(ABC):
             indices = np.random.permutation(n_samples)
 
             # Prepare data in batches
-            n_batches = (n_samples + batch_size - 1)
+            n_batches = (n_samples + batch_size - 1) // batch_size
 
             for batch_idx in range(n_batches):
                 batch_start = time.time()
@@ -198,25 +192,6 @@ class FashionClassifier(ABC):
             print(f"\nEpoch {epoch+1}/{epochs}: Train Loss: {avg_epoch_loss:.6f}, Val Loss: {avg_val_loss:.6f}, Val Accuracy: {val_accuracy:.4f}   Time: {epoch_time:.2f}s ({n_samples/epoch_time:.2f} samples/sec)")
 
         return history
-
-    def predict(self, X_test):
-        """Make predictions on test data."""
-        X_test = X_test.numpy() if isinstance(X_test, torch.Tensor) else X_test
-
-        n_samples = len(X_test)
-        predictions = np.zeros(n_samples, dtype=int)
-
-        for idx in range(n_samples):
-            if idx % 100 == 0:
-                print(f"Predicting sample {idx}/{n_samples}")
-
-            # Forward pass
-            outputs = self.forward(X_test[idx])
-
-            # Get predicted class
-            predictions[idx] = np.argmax(outputs)
-
-        return predictions
 
     def evaluate(self, X_test, y_test, verbose=False):
         """Evaluate model on test data."""

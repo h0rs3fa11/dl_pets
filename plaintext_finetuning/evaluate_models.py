@@ -5,10 +5,8 @@ from data_prepare import prepare_data, load_test_data, load_data
 from helper import preprocess_labels
 from nn_model import MSEFashionClassifier, CEFashionClassifier
 # load the weights
-
 X_test, y_test, n_features, n_classes = load_test_data()
 X_train, y_train, X_val, y_val = load_data()
-
 
 def evaluate_model(model):
   if model == "mse":
