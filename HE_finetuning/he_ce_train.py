@@ -21,10 +21,18 @@ while (epochs <= epoches):
         model_save_path, f'he_fashion_model_{epochs-1}.json'), model)
 
   history = model.train(
-      X_train, y_train_mapped, 1, learning_rate=learning_rate, batch_size=batch_size, verbose=True, validation=True)
+      X_train, y_train_mapped, 1, learning_rate=learning_rate, batch_size=batch_size, verbose=True)
+
+  val_loss, val_accuracy = model.validate(X_val, y_val_mapped)
+
+  history["val_loss"] = val_loss
+  history["val_accuracy"] = val_accuracy
 
   HEModelIO.save_model(model, os.path.join(
       model_save_path, f'he_fashion_model_{epochs}.json'))
   HEModelIO.save_training_history(history, os.path.join(
       model_save_path, f'he_training_history_{epochs}.json'))
   epochs += 1
+
+  print(
+      f"Epoch {epochs} - Validation loss: {val_loss}, validation accuracy: {val_accuracy}")
