@@ -1,7 +1,13 @@
 # MPC benchmark
 
 ```
+cd benchmarks
 python launcher.py --help
+```
+## plaintext baseline
+
+```
+python baseline.py
 ```
 
 ## Simulate two parties on one host
