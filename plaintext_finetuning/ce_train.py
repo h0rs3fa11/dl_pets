@@ -18,6 +18,6 @@ history = model.train(X_train, y_train_mapped, X_val, y_val_mapped,
                       epoches, learning_rate=learning_rate, batch_size=batch_size)
 
 ModelIO.save_model(model, os.path.join(
-    model_save_path, f'fashion_model.json'))
+    model_save_path, 'fashion_model.json'))
 ModelIO.save_training_history(history, os.path.join(
-    model_save_path, f'training_history.json'))
+    model_save_path, 'training_history.json'))
