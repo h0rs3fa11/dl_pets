@@ -13,7 +13,7 @@ model_save_path = os.path.join(model_path, 'he-mse')
 y_train_mapped, y_val_mapped, n_classes, label_map = preprocess_labels(
     y_train, y_val)
 
-val_per_epoch = {"val_loss": [], "val_accuracy": []}
+# val_per_epoch = {"val_loss": [], "val_accuracy": []}
 
 epochs = 1
 
@@ -27,8 +27,10 @@ while (epochs <= epoches):
       X_train, y_train_mapped, 1, learning_rate=learning_rate, batch_size=batch_size, verbose=True)
 
   val_loss, val_accuracy = model.validate(X_val, y_val_mapped)
-  val_per_epoch["val_loss"].append(val_loss)
-  val_per_epoch["val_accuracy"].append(val_accuracy)
+
+  history["val_loss"] = val_loss
+  history["val_accuracy"] = val_accuracy
+
   print(
       f"Epoch {epochs} - Validation loss: {val_loss}, validation accuracy: {val_accuracy}")
 
@@ -37,6 +39,3 @@ while (epochs <= epoches):
   HEModelIO.save_training_history(history, os.path.join(
       model_save_path, f'he_training_history_{epochs}.json'))
   epochs += 1
-
-with open(os.path.join(model_save_path, 'validation.json'), 'w') as f:
-    json.dump(val_per_epoch, f)
