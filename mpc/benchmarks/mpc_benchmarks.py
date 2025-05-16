@@ -3,8 +3,6 @@ import os
 import random
 import time
 import json
-
-from tqdm import tqdm
 import numpy as np
 import crypten
 import crypten.communicator as comm
@@ -16,6 +14,7 @@ import torch.utils.data.distributed
 
 parent_dir = os.path.abspath(os.path.join(
         os.path.dirname(__file__), '..', '..'))
+encrypted_label = True
 
 def run_benchmarks(
     epochs=20,
@@ -23,12 +22,17 @@ def run_benchmarks(
     batch_size=64,
     lr=0.1,
     momentum=0.99,
-    loss_func="mse",
+    loss_func="ce",
     seed=42,
 ):
+    aws = True
+    print(encrypted_label)
+
     if seed is not None:
         random.seed(seed)
         torch.manual_seed(seed)
+
+    crypten.init()
 
     rank = comm.get().get_rank()
 
@@ -36,7 +40,7 @@ def run_benchmarks(
     BOB = 1
 
     # load data from two parties
-    party_path = f'party{rank}'
+    party_path = f'party{rank}' if aws == False else f'../party{rank}'
     x_path_train = os.path.join(party_path, 'X_train.pt')
     x_path_val = os.path.join(party_path, 'X_val.pt')
     y_path_train = os.path.join(party_path, 'y_train.pt')
@@ -75,48 +79,15 @@ def run_benchmarks(
     x_combined_enc = crypten.cat([x_train_alice, x_train_bob], dim=1)
     x_combined_enc_val = crypten.cat([x_val_alice, x_val_bob], dim=1)
 
-    y_train = crypten.cryptensor(labels_one_hot)
-    y_val = crypten.cryptensor(val_labels_one_hot)
+    if encrypted_label:
+        y_train = crypten.cryptensor(labels_one_hot)
+        y_val = crypten.cryptensor(val_labels_one_hot)
+    else:
+        y_train = labels_one_hot
+        y_val = val_labels_one_hot
 
     n_features = x_combined_enc.shape[1]
 
-    if rank == 0:
-        # process y for party 0
-        pass
-    # n_features, n_classes, features, labels_one_hot, val_labels_one_hot = preprocess_data()
-
-    # data_alice = features['features_alice']
-    # data_bob = features['features_bob']
-    # data_alice_val = features['features_alice_val']
-    # data_bob_val = features['features_bob_val']
-
-    # if rank == 0:
-    #     x_alice = data_alice
-    #     x_alice_val = data_alice_val
-    # else:
-    #     x_alice = torch.empty(data_alice.size())
-    #     x_alice_val = torch.empty(data_alice_val.size())
-
-    # if rank == 1:
-    #     x_bob = data_bob
-    #     x_bob_val = data_bob_val
-    # else:
-    #     x_bob = torch.empty(data_bob.size())
-    #     x_bob_val = torch.empty(data_bob_val.size())
-
-    # x_alice_enc = crypten.cryptensor(x_alice, src=0)
-    # x_bob_enc = crypten.cryptensor(x_bob, src=1)
-
-    # x_alice_enc_val = crypten.cryptensor(x_alice_val, src=0)
-    # x_bob_enc_val = crypten.cryptensor(x_bob_val, src=1)
-
-    # x_combined_enc = crypten.cat([x_alice_enc, x_bob_enc], dim=0)
-    # x_combined_enc_val = crypten.cat([x_alice_enc_val, x_bob_enc_val], dim=0)
-
-    # y_train = crypten.cryptensor(labels_one_hot)
-    # y_val = crypten.cryptensor(val_labels_one_hot)
-
-    crypten.print("1111")
     # create model
     pytorch_model = TorchFashionClassifier(n_features, n_classes)
     crypten.print(f"Optimizer parameter: {lr}, {momentum}")
@@ -139,6 +110,10 @@ def run_benchmarks(
     val_losses = []
     val_accuracy = []
     epoch_times = []
+
+    if aws and rank == 0:
+        print("start training")
+
     for epoch in range(start_epoch, epochs):
         # train for one epoch
         loss, epoch_time = train(
@@ -147,8 +122,8 @@ def run_benchmarks(
             y_train,
             criterion,
             optimizer,
-            epoch,
             batch_size,
+            verbose=False
         )
 
         train_loss.append(loss)
@@ -158,6 +133,7 @@ def run_benchmarks(
         val_loss, accuracy = validate(model, x_combined_enc_val, y_val, criterion, epoch)
         val_losses.append(val_loss)
         val_accuracy.append(accuracy)
+        crypten.print(f"Epoch {epoch + 1} --- Training loss: {loss}, epoch time: {epoch_time}, val loss: {val_loss}, val accuracy: {accuracy}")
 
     if rank == 0:
         history = {
@@ -167,12 +143,12 @@ def run_benchmarks(
             "epoch_times": epoch_times
         }
 
-        result_dir = os.path.join(parent_dir, 'data', 'models', 'mpc')
-
+        result_dir = os.path.join(parent_dir, 'data', 'models', 'mpc') if aws == False else 'results'
         if not os.path.exists(result_dir):
             os.makedirs(result_dir)
 
         with open(os.path.join(result_dir, f'mpc_training_history_{loss_func}.json'), 'w') as f:
+            crypten.print(f"Write to result file: {os.path.join(result_dir, f'mpc_training_history_{loss_func}.json')}")
             json.dump(history, f)
 
 
@@ -234,7 +210,7 @@ def create_model(pytorch_model, n_features):
     return model
 
 
-def train(model, x_combined_enc, y_train, criterion, optimizer, epoch, batch_size):
+def train(model, x_combined_enc, y_train, criterion, optimizer, batch_size, verbose=False):
     crypten.print(
         f"batch size: {batch_size}, training sample size: {x_combined_enc.size(0)}")
     num_batches = x_combined_enc.size(0) // batch_size
@@ -242,8 +218,7 @@ def train(model, x_combined_enc, y_train, criterion, optimizer, epoch, batch_siz
     model.train()
     batch_losses = []
     start_time = time.time()
-    for batch in tqdm(range(num_batches)):
-        # for batch in range(5):
+    for batch in range(num_batches):
         start, end = batch * batch_size, (batch + 1) * batch_size
         x_train = x_combined_enc[start:end]
         y_batch = y_train[start:end]
@@ -259,7 +234,8 @@ def train(model, x_combined_enc, y_train, criterion, optimizer, epoch, batch_siz
         optimizer.step()
         batch_loss = loss_value.get_plain_text()
         batch_losses.append(batch_loss.item())
-        # crypten.print(f"\tBatch {(batch + 1)} of {num_batches} Loss {batch_loss.item():.4f}")
+        if verbose:
+            crypten.print(f"\tBatch {(batch + 1)} of {num_batches} Loss {batch_loss.item():.4f}")
 
     epoch_time = time.time() - start_time
     return sum(batch_losses) / num_batches, epoch_time
@@ -277,9 +253,9 @@ def validate(model, x_combined_enc_val, y_val, criterion, epoch):
     batch_val_losses = []
     all_val_outputs_decrypted_list = []
     all_y_val_decrypted_list = []
-
+    crypten.print("start validation")
     with crypten.no_grad():
-        for val_batch_idx in tqdm(range(num_val_batches), disable=(rank != 0), desc="Validation Batches"):
+        for val_batch_idx in range(num_val_batches):
             val_start = val_batch_idx * val_batch_size
             val_end = min((val_batch_idx + 1) * val_batch_size,
                           x_combined_enc_val.size(0))
@@ -300,8 +276,11 @@ def validate(model, x_combined_enc_val, y_val, criterion, epoch):
             # For overall accuracy calculation later
             all_val_outputs_decrypted_list.append(
                 val_outputs_batch_enc.get_plain_text())
-            all_y_val_decrypted_list.append(
-                y_val_batch_one_hot.get_plain_text())
+            if encrypted_label:
+                all_y_val_decrypted_list.append(
+                    y_val_batch_one_hot.get_plain_text())
+            else:
+                all_y_val_decrypted_list.append(y_val_batch_one_hot)
     if batch_val_losses:
         # Filter NaNs
         valid_losses = [l for l in batch_val_losses if l == l]

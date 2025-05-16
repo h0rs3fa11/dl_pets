@@ -32,3 +32,9 @@ example
 ```
 python launcher.py --multiprocess --loss-func mse
 ```
+
+## AWS Instances
+
+1. Deploy two aws instances (16 GB storage, xxx)
+2. Install necessary packages on it(pip, crypten, requirement.txt)
+3. Copy the training data to it (benchmarks/party0, benchmarks/party1)
